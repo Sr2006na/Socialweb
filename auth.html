@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SocialWeb - Authentication</title>
+    <title>SocialWeb - Login</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,29 +11,25 @@
         <div class="auth-box">
             <h2>Welcome to SocialWeb</h2>
             
-            <!-- Signup Form -->
             <form id="signupForm" class="auth-form">
                 <input type="text" id="name" placeholder="Your name" required>
                 <input type="email" id="email" placeholder="Email" required>
                 <input type="password" id="password" placeholder="Password (min 6 chars)" required>
-                <textarea id="bio" placeholder="Short bio (max 100 chars)"></textarea>
                 <button type="submit" class="btn-auth">Create Account</button>
             </form>
 
-            <!-- Login Form -->
             <form id="loginForm" class="auth-form">
                 <input type="email" id="loginEmail" placeholder="Email" required>
                 <input type="password" id="loginPassword" placeholder="Password" required>
                 <button type="submit" class="btn-auth">Login</button>
             </form>
-<p class="toggle-auth">Forgot password? <a href="#" onclick="resetPassword()">Reset it here</a></p>
-            <p class="toggle-auth">Already have an account? <a href="#" id="showLogin">Login</a></p>
+
+            <p class="toggle-auth">
+                <a href="#" onclick="toggleForms()">Switch to Login/Signup</a><br>
+                <a href="#" onclick="resetPassword()">Forgot Password?</a>
+            </p>
         </div>
     </div>
-
-    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
