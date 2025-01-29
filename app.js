@@ -5,8 +5,7 @@ const firebaseConfig = {
     projectId: "socialweb369",
     storageBucket: "socialweb369.firebasestorage.app",
     messagingSenderId: "947074114887",
-    appId: "1:947074114887:web:0e0f670cb798b951e89862",
-    measurementId: "G-W45P6C6YTF"
+    appId: "1:947074114887:web:0e0f670cb798b951e89862"
 };
 
 // Initialize Firebase
@@ -14,137 +13,163 @@ const app = firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-// Auth State Listener (Fixed)
+// Auth State Management
 auth.onAuthStateChanged(user => {
-    if (user) {
-        if (window.location.pathname.includes('auth.html')) {
-            window.location.href = 'index.html';
-        }
-        loadUserProfile(user.uid);
-        if (window.location.pathname.includes('index.html')) {
-            loadPosts();
-        }
-    } else {
-        if (!window.location.pathname.includes('auth.html')) {
-            window.location.href = 'auth.html';
-        }
+    if (user && location.pathname.includes('auth.html')) {
+        location.href = 'index.html';
+    }
+    if (!user && !location.pathname.includes('auth.html')) {
+        location.href = 'auth.html';
     }
 });
 
-// Add this to Profile.html initialization
-if (window.location.pathname.includes('profile.html')) {
-    document.addEventListener('DOMContentLoaded', () => {
-        const user = auth.currentUser;
-        if (user) {
-            // Initialize bio character counter
-            document.getElementById('bioText').addEventListener('input', (e) => {
-                const remaining = 200 - e.target.value.length;
-                document.getElementById('bioCharCounter').textContent = `${remaining} remaining`;
-            });
-            
-            // Load existing bio
-            db.collection('users').doc(user.uid).get()
-                .then(doc => {
-                    if (doc.exists) {
-                        document.getElementById('bioText').value = doc.data().bio || '';
-                    }
-                });
-        }
-    });
+// Authentication Functions
+function toggleForms() {
+    const signupForm = document.getElementById('signupForm');
+    const loginForm = document.getElementById('loginForm');
+    [signupForm.style.display, loginForm.style.display] = 
+    [loginForm.style.display, signupForm.style.display];
 }
 
-// Updated Search Function (Firestore query)
-document.getElementById('searchInput')?.addEventListener('input', (e) => {
-    const searchTerm = e.target.value.toLowerCase();
-    if (searchTerm === '') {
-        loadPosts();
-        return;
-    }
-    
-    db.collection('posts')
-        .orderBy('timestamp', 'desc')
-        .where('content', '>=', searchTerm)
-        .where('content', '<=', searchTerm + '\uf8ff')
-        .onSnapshot(snapshot => {
-            const filtered = [];
-            snapshot.forEach(doc => {
-                filtered.push({ id: doc.id, ...doc.data() });
-            });
-            renderPosts(filtered);
+document.getElementById('signupForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+    const name = document.getElementById('name').value;
+
+    try {
+        const userCred = await auth.createUserWithEmailAndPassword(email, password);
+        await db.collection('users').doc(userCred.user.uid).set({
+            name,
+            bio: '',
+            profileImage: '',
+            joined: new Date()
         });
+        location.href = 'index.html';
+    } catch (error) {
+        showError(error.message);
+    }
 });
 
-// Fixed Post Rendering (Safe HTML)
-function renderPosts(postsArray) {
-    const container = document.getElementById('postsList');
-    if (!container) return;
+document.getElementById('loginForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
 
-    container.innerHTML = postsArray.map(post => {
-        const safeContent = post.content.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        return `
+    try {
+        await auth.signInWithEmailAndPassword(email, password);
+        location.href = 'index.html';
+    } catch (error) {
+        showError(error.message);
+    }
+});
+
+// Post Functions
+async function createPost() {
+    const content = document.getElementById('postContent').value.trim();
+    if (!content) return showError("Post cannot be empty!");
+    
+    const loading = document.querySelector('.loading');
+    try {
+        loading.classList.add('active');
+        await db.collection('posts').add({
+            content,
+            likes: 0,
+            comments: [],
+            timestamp: new Date(),
+            userId: auth.currentUser.uid
+        });
+        document.getElementById('postContent').value = '';
+    } catch (error) {
+        showError(error.message);
+    } finally {
+        loading.classList.remove('active');
+    }
+}
+
+function renderPosts(posts) {
+    const container = document.getElementById('postsList');
+    container.innerHTML = posts.map(post => `
         <div class="post-card">
-            <p>${safeContent.replace(/\n/g, '<br>')}</p>
-            <div class="comments">
-                ${post.comments.map(comment => `
-                    <div class="comment">
-                        <span class="comment-text">${comment.text}</span>
-                        <span class="comment-time">${comment.timestamp}</span>
-                    </div>
-                `).join('')}
-            </div>
+            <p>${post.content.replace(/\n/g, '<br>')}</p>
+            <div class="comments">${renderComments(post.comments)}</div>
             <div class="post-meta">
-                <span>${new Date(post.timestamp?.toDate()).toLocaleString()}</span>
+                <span>${new Date(post.timestamp).toLocaleString()}</span>
                 <div>
-                    <button onclick="likePost('${post.id}')" class="${post.likes > 0 ? 'liked' : ''}">
-                        ❤️ ${post.likes}
-                    </button>
-                    <button onclick="addComment('${post.id}')" class="comment-btn">
-                        💬 ${post.comments.length}
-                    </button>
-                    <button onclick="deletePost('${post.id}')" class="delete-btn">
-                        🗑️
-                    </button>
+                    <button onclick="likePost('${post.id}')">❤️ ${post.likes}</button>
+                    <button onclick="addComment('${post.id}')">💬 ${post.comments.length}</button>
+                    <button onclick="deletePost('${post.id}')">🗑️</button>
                 </div>
             </div>
         </div>
-        `;
-    }).join('');
+    `).join('');
 }
 
-// Rest of the app.js remains the same as previous working version
+function renderComments(comments) {
+    return comments.map(comment => `
+        <div class="comment">
+            <span class="comment-text">${comment.text}</span>
+            <span class="comment-time">${new Date(comment.timestamp).toLocaleString()}</span>
+        </div>
+    `).join('');
+}
 
-// Password Reset Function
-function resetPassword() {
-    const email = prompt("Enter your email to reset your password:");
-    if (email) {
-        auth.sendPasswordResetEmail(email)
-            .then(() => {
-                alert('Password reset email sent! Check your inbox.');
-            })
-            .catch(error => {
-                alert('Error sending reset email: ' + error.message);
-            });
+// Profile Functions
+async function saveProfile() {
+    const user = auth.currentUser;
+    const bio = document.getElementById('bioText').value;
+    const file = document.getElementById('profileImage').files[0];
+
+    try {
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = async () => {
+                await db.collection('users').doc(user.uid).update({
+                    profileImage: reader.result,
+                    bio
+                });
+                location.reload();
+            }
+            reader.readAsDataURL(file);
+        } else {
+            await db.collection('users').doc(user.uid).update({ bio });
+            showError("Profile updated!");
+        }
+    } catch (error) {
+        showError(error.message);
     }
 }
 
-// Add Reset Password Link to Auth Page
-if (window.location.pathname.includes('auth.html')) {
-    const resetLink = document.createElement('p');
-    resetLink.innerHTML = '<a href="#" onclick="resetPassword()">Forgot password?</a>';
-    resetLink.style.textAlign = 'center';
-    resetLink.style.marginTop = '1rem';
-    document.querySelector('.auth-box').appendChild(resetLink);
-}
-
-// Custom Error Toast
+// Helper Functions
 function showError(message) {
     const toast = document.createElement('div');
     toast.className = 'error-toast';
     toast.textContent = message;
     document.body.appendChild(toast);
-    
-    setTimeout(() => {
-        toast.style.display = 'block';
-        setTimeout(() => toast.remove(), 3000);
-    }, 10);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+function logout() {
+    auth.signOut();
+}
+
+// Initialize
+if (location.pathname.includes('index.html')) {
+    db.collection('posts')
+        .orderBy('timestamp', 'desc')
+        .onSnapshot(snap => {
+            const posts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            renderPosts(posts);
+        });
+}
+
+if (location.pathname.includes('profile.html')) {
+    auth.onAuthStateChanged(user => {
+        db.collection('users').doc(user.uid).get().then(doc => {
+            const data = doc.data();
+            document.getElementById('bioText').value = data.bio;
+            document.querySelector('.profile-pic').src = data.profileImage || 
+                'https://via.placeholder.com/150';
+        });
+    });
 }
