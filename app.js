@@ -13,44 +13,70 @@ const app = firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-// Auth State Management
+// Auth State Listener
 auth.onAuthStateChanged(user => {
-    if (user && location.pathname.includes('auth.html')) {
-        location.href = 'index.html';
-    }
-    if (!user && !location.pathname.includes('auth.html')) {
-        location.href = 'auth.html';
+    if (user) {
+        // Redirect to index.html if logged in
+        if (location.pathname.includes('auth.html')) {
+            location.href = 'index.html';
+        }
+    } else {
+        // Redirect to auth.html if not logged in
+        if (!location.pathname.includes('auth.html')) {
+            location.href = 'auth.html';
+        }
     }
 });
 
-// Authentication Functions
+// Toggle Forms
 function toggleForms() {
     const signupForm = document.getElementById('signupForm');
     const loginForm = document.getElementById('loginForm');
-    [signupForm.style.display, loginForm.style.display] = 
-    [loginForm.style.display, signupForm.style.display];
+    const toggleText = document.getElementById('toggleText');
+
+    if (signupForm.style.display === 'none') {
+        signupForm.style.display = 'block';
+        loginForm.style.display = 'none';
+        toggleText.innerHTML = 'Already have an account? <a href="#" onclick="toggleForms()">Login</a>';
+    } else {
+        signupForm.style.display = 'none';
+        loginForm.style.display = 'block';
+        toggleText.innerHTML = 'Don\'t have an account? <a href="#" onclick="toggleForms()">Sign Up</a>';
+    }
 }
 
+// Signup Function
 document.getElementById('signupForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
     const name = document.getElementById('name').value;
 
+    if (password.length < 6) {
+        alert('Password must be at least 6 characters');
+        return;
+    }
+
     try {
-        const userCred = await auth.createUserWithEmailAndPassword(email, password);
-        await db.collection('users').doc(userCred.user.uid).set({
-            name,
+        // Create user with email/password
+        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+        
+        // Save user profile in Firestore
+        await db.collection('users').doc(userCredential.user.uid).set({
+            name: name,
             bio: '',
             profileImage: '',
-            joined: new Date()
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
-        location.href = 'index.html';
+
+        // Redirect to main page
+        window.location.href = 'index.html';
     } catch (error) {
-        showError(error.message);
+        alert(error.message);
     }
 });
 
+// Login Function
 document.getElementById('loginForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = document.getElementById('loginEmail').value;
@@ -58,63 +84,34 @@ document.getElementById('loginForm')?.addEventListener('submit', async (e) => {
 
     try {
         await auth.signInWithEmailAndPassword(email, password);
-        location.href = 'index.html';
+        window.location.href = 'index.html';
     } catch (error) {
-        showError(error.message);
+        alert(error.message);
     }
 });
 
-// Post Functions
-async function createPost() {
-    const content = document.getElementById('postContent').value.trim();
-    if (!content) return showError("Post cannot be empty!");
-    
-    const loading = document.querySelector('.loading');
-    try {
-        loading.classList.add('active');
-        await db.collection('posts').add({
-            content,
-            likes: 0,
-            comments: [],
-            timestamp: new Date(),
-            userId: auth.currentUser.uid
-        });
-        document.getElementById('postContent').value = '';
-    } catch (error) {
-        showError(error.message);
-    } finally {
-        loading.classList.remove('active');
+// Password Reset Function
+function resetPassword() {
+    const email = prompt("Enter your email to reset your password:");
+    if (email) {
+        auth.sendPasswordResetEmail(email)
+            .then(() => {
+                alert('Password reset email sent! Check your inbox.');
+            })
+            .catch(error => {
+                alert('Error sending reset email: ' + error.message);
+            });
     }
 }
 
-function renderPosts(posts) {
-    const container = document.getElementById('postsList');
-    container.innerHTML = posts.map(post => `
-        <div class="post-card">
-            <p>${post.content.replace(/\n/g, '<br>')}</p>
-            <div class="comments">${renderComments(post.comments)}</div>
-            <div class="post-meta">
-                <span>${new Date(post.timestamp).toLocaleString()}</span>
-                <div>
-                    <button onclick="likePost('${post.id}')">❤️ ${post.likes}</button>
-                    <button onclick="addComment('${post.id}')">💬 ${post.comments.length}</button>
-                    <button onclick="deletePost('${post.id}')">🗑️</button>
-                </div>
-            </div>
-        </div>
-    `).join('');
+// Logout Function
+function logout() {
+    auth.signOut().then(() => {
+        window.location.href = 'auth.html';
+    });
 }
 
-function renderComments(comments) {
-    return comments.map(comment => `
-        <div class="comment">
-            <span class="comment-text">${comment.text}</span>
-            <span class="comment-time">${new Date(comment.timestamp).toLocaleString()}</span>
-        </div>
-    `).join('');
-}
-
-// Profile Functions
+// Save Profile Function
 async function saveProfile() {
     const user = auth.currentUser;
     const bio = document.getElementById('bioText').value;
@@ -133,43 +130,58 @@ async function saveProfile() {
             reader.readAsDataURL(file);
         } else {
             await db.collection('users').doc(user.uid).update({ bio });
-            showError("Profile updated!");
+            alert('Profile updated!');
         }
     } catch (error) {
-        showError(error.message);
+        alert(error.message);
     }
 }
 
-// Helper Functions
-function showError(message) {
-    const toast = document.createElement('div');
-    toast.className = 'error-toast';
-    toast.textContent = message;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
+// Load Posts in Real-Time
+function loadPosts() {
+    db.collection('posts').orderBy('timestamp', 'desc').onSnapshot(snapshot => {
+        const posts = [];
+        snapshot.forEach(doc => {
+            posts.push({ id: doc.id, ...doc.data() });
+        });
+        renderPosts(posts);
+    });
 }
 
-function logout() {
-    auth.signOut();
+// Render Posts
+function renderPosts(postsArray) {
+    const container = document.getElementById('postsList');
+    if (!container) return;
+
+    container.innerHTML = postsArray.map(post => `
+        <div class="post-card">
+            <p>${post.content.replace(/\n/g, '<br>')}</p>
+            <div class="comments">${renderComments(post.comments)}</div>
+            <div class="post-meta">
+                <span>${new Date(post.timestamp?.toDate()).toLocaleString()}</span>
+                <div>
+                    <button onclick="likePost('${post.id}')">❤️ ${post.likes}</button>
+                    <button onclick="addComment('${post.id}')">💬 ${post.comments.length}</button>
+                    <button onclick="deletePost('${post.id}')">🗑️</button>
+                </div>
+            </div>
+        </div>
+    `).join('');
 }
 
 // Initialize
 if (location.pathname.includes('index.html')) {
-    db.collection('posts')
-        .orderBy('timestamp', 'desc')
-        .onSnapshot(snap => {
-            const posts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            renderPosts(posts);
-        });
+    loadPosts();
 }
 
 if (location.pathname.includes('profile.html')) {
     auth.onAuthStateChanged(user => {
-        db.collection('users').doc(user.uid).get().then(doc => {
-            const data = doc.data();
-            document.getElementById('bioText').value = data.bio;
-            document.querySelector('.profile-pic').src = data.profileImage || 
-                'https://via.placeholder.com/150';
-        });
+        if (user) {
+            db.collection('users').doc(user.uid).get().then(doc => {
+                const data = doc.data();
+                document.getElementById('bioText').value = data.bio || '';
+                document.querySelector('.profile-pic').src = data.profileImage || 'https://via.placeholder.com/150';
+            });
+        }
     });
 }
