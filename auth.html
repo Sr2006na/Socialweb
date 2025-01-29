@@ -11,6 +11,7 @@
         <div class="auth-box">
             <h2>Welcome to SocialWeb</h2>
             
+            <!-- Signup Form -->
             <form id="signupForm" class="auth-form">
                 <input type="text" id="name" placeholder="Your name" required>
                 <input type="email" id="email" placeholder="Email" required>
@@ -18,14 +19,15 @@
                 <button type="submit" class="btn-auth">Create Account</button>
             </form>
 
-            <form id="loginForm" class="auth-form">
+            <!-- Login Form -->
+            <form id="loginForm" class="auth-form" style="display: none;">
                 <input type="email" id="loginEmail" placeholder="Email" required>
                 <input type="password" id="loginPassword" placeholder="Password" required>
                 <button type="submit" class="btn-auth">Login</button>
             </form>
 
             <p class="toggle-auth">
-                <a href="#" onclick="toggleForms()">Switch to Login/Signup</a><br>
+                <span id="toggleText">Already have an account? <a href="#" onclick="toggleForms()">Login</a></span><br>
                 <a href="#" onclick="resetPassword()">Forgot Password?</a>
             </p>
         </div>
