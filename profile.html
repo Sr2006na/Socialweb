@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Firebase v7.20.0 -->
+    <script src="https://www.gstatic.com/firebasejs/7.20.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/7.20.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/7.20.0/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/7.20.0/firebase-storage.js"></script>
+
+    <!-- Firebase Config & Profile Logic -->
+    <script src="firebase.js"></script>
+    <script src="profile.js"></script>
+
+    <div class="navbar">
+        <span class="brand">My Profile</span>
+        <button id="backBtn" class="btn">Back</button>
+    </div>
+
+    <div class="profile-container">
+        <img id="profilePic" src="default-profile.png" alt="Profile Picture">
+        <input type="file" id="profilePicInput">
+        <input type="text" id="usernameInput" placeholder="Enter Username">
+        <textarea id="bioInput" placeholder="Enter your bio..."></textarea>
+        <button id="saveProfileBtn" class="btn btn-primary">Save Profile</button>
+    </div>
+</body>
+</html>
