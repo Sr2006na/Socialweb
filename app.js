@@ -15,23 +15,18 @@ document.addEventListener("DOMContentLoaded", () => {
     var logoutBtn = document.getElementById('logoutBtn');
     var errorPopup = document.getElementById('errorPopup');
 
-    let unsubscribe = null; // Store listener to prevent duplicate calls
+    let unsubscribePosts = null;
+    const postCache = new Map();
 
-    // Show UI Based on Login State
     auth.onAuthStateChanged((user) => {
         if (user) {
             authContainer.style.display = 'none';
             loginContainer.style.display = 'none';
             mainContainer.style.display = 'block';
             navbar.style.display = 'flex';
-            
-            loadPosts();  // Load posts when user logs in
+            loadPosts();
         } else {
-            // Unsubscribe from Firestore listener when user logs out
-            if (unsubscribe) {
-                unsubscribe();
-                unsubscribe = null;
-            }
+            cleanup();
             authContainer.style.display = 'block';
             loginContainer.style.display = 'none';
             mainContainer.style.display = 'none';
@@ -39,14 +34,21 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    // Show Custom Error Messages
     function showError(message) {
         errorPopup.innerText = message;
         errorPopup.style.display = 'block';
-        setTimeout(() => { errorPopup.style.display = 'none'; }, 3000);
+        setTimeout(() => errorPopup.style.display = 'none', 3000);
     }
 
-    // Toggle Signup/Login
+    function cleanup() {
+        if (unsubscribePosts) {
+            unsubscribePosts();
+            unsubscribePosts = null;
+        }
+        postsContainer.innerHTML = '';
+        postCache.clear();
+    }
+
     document.getElementById('signupLink').addEventListener('click', (e) => {
         e.preventDefault();
         authContainer.style.display = 'block';
@@ -59,7 +61,6 @@ document.addEventListener("DOMContentLoaded", () => {
         loginContainer.style.display = 'block';
     });
 
-    // Sign Up: Create User Document in Firestore
     document.getElementById('signupForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         var email = document.getElementById('signupEmail').value;
@@ -67,17 +68,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
         try {
             const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-            // Create user document in Firestore
             await db.collection("users").doc(userCredential.user.uid).set({
-                username: email.split('@')[0], // Default to email prefix
-                profilePicUrl: "default-profile.png"
+                username: email.split('@')[0],
+                profilePicBase64: "" // Default empty Base64
             });
         } catch (error) {
             showError(error.message);
         }
     });
 
-    // Login
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         var email = document.getElementById('loginEmail').value;
@@ -90,126 +89,123 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    // Profile Button
     profileBtn.addEventListener("click", () => {
         window.location.href = "profile.html";
     });
 
-    // Logout: Unsubscribe Listener and Sign Out
-    logoutBtn.addEventListener("click", () => {
-        if (unsubscribe) {
-            unsubscribe();
-            unsubscribe = null;
-        }
-        auth.signOut().then(() => {
+    logoutBtn.addEventListener("click", async () => {
+        try {
+            cleanup();
+            await auth.signOut();
             window.location.href = "index.html";
-        });
+        } catch (error) {
+            console.error("Error during logout:", error);
+        }
     });
 
-    // Google Sign-In
-    document.getElementById('googleSignIn').addEventListener('click', () => {
+    const handleGoogleSignIn = () => {
         auth.signInWithPopup(provider).catch((error) => {
             showError(error.message);
         });
-    });
+    };
 
-    // Add Post Feature
-    postBtn.addEventListener('click', async () => {
-        var text = postText.value.trim();
-        var user = auth.currentUser;
+    document.getElementById('googleSignIn').addEventListener('click', handleGoogleSignIn);
+    document.getElementById('googleSignInLogin').addEventListener('click', handleGoogleSignIn);
 
-        if (!text) return showError("Post cannot be empty.");
-        if (!user) return showError("You must be logged in to post.");
+    postBtn.addEventListener("click", async () => {
+        const postContent = postText.value.trim();
+        const user = auth.currentUser;
+
+        if (!postContent || !user) return;
 
         try {
             await db.collection("posts").add({
-                text: text,
-                userId: user.uid,  // Store the user ID
+                text: postContent,
+                userId: user.uid,
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
             });
-
-            postText.value = "";  // Clear input after posting
+            postText.value = "";
         } catch (error) {
-            showError(error.message);
+            console.error("Error adding post:", error);
         }
     });
 
-    // Load Posts from All Users
-    function loadPosts() {
-        console.log("Loading posts...");
-        postsContainer.innerHTML = "";
+    async function loadPosts() {
+        if (unsubscribePosts) return;
 
-        if (unsubscribe) {
-            unsubscribe(); // Unsubscribe from the previous listener
-        }
+        unsubscribePosts = db.collection("posts")
+            .orderBy("timestamp", "desc")
+            .onSnapshot(async (snapshot) => {
+                const fragment = document.createDocumentFragment();
+                const userPromises = [];
 
-        // Fetch all posts from Firestore, ordered by timestamp
-        unsubscribe = db.collection("posts").orderBy("timestamp", "desc").onSnapshot(
-            async (snapshot) => {
-                console.log("New snapshot received:", snapshot.docs.length, "posts");
-                const posts = [];
-                for (const doc of snapshot.docs) {
-                    const post = doc.data();
-                    console.log("Processing post:", post);
-                    try {
-                        // Fetch user data for the post's userId
-                        const userData = await db.collection("users").doc(post.userId).get();
-                        console.log("Fetched user data:", userData.data());
-                        const username = userData.exists ? userData.data().username : "Unknown";
-                        const profilePicUrl = userData.exists && userData.data().profilePicUrl ? userData.data().profilePicUrl : "default-profile.png";
+                snapshot.docChanges().forEach((change) => {
+                    const post = change.doc.data();
+                    const postId = change.doc.id;
 
-                        // Add post to the list
-                        posts.push(`
-                            <div class="post">
-                                <img src="${profilePicUrl}" class="post-profile-pic">
-                                <div class="post-content">
-                                    <p><strong>${username}</strong></p>
-                                    <p>${post.text}</p>
-                                </div>
-                            </div>
-                        `);
-                    } catch (error) {
-                        console.error("Error fetching user data:", error);
+                    if (change.type === "removed") {
+                        const postElement = postsContainer.querySelector(`[data-id="${postId}"]`);
+                        if (postElement) postElement.remove();
+                        postCache.delete(postId);
+                        return;
                     }
-                }
-                // Render all posts at once
-                postsContainer.innerHTML = posts.join("");
-            },
-            (error) => { // Error handler for onSnapshot
-                console.error("Error in onSnapshot:", error);
-                showError("Failed to load posts: " + error.message);
-            }
-        );
+
+                    if (!post.userId) return;
+
+                    if (postCache.has(postId)) {
+                        updatePost(postId, post);
+                    } else {
+                        userPromises.push(
+                            db.collection("users").doc(post.userId).get()
+                                .then(userDoc => ({ post, postId, userDoc }))
+                        );
+                    }
+                });
+
+                const results = await Promise.all(userPromises);
+                results.forEach(({ post, postId, userDoc }) => {
+                    const user = userDoc.exists ? userDoc.data() : {};
+                    const postElement = renderPost(postId, post, user);
+                    fragment.appendChild(postElement);
+                    postCache.set(postId, post);
+                });
+
+                postsContainer.prepend(fragment);
+            }, (error) => {
+                console.error("Error loading posts:", error);
+                showError("Failed to load posts");
+            });
     }
 
-    // Update User Profile (Username and Profile Picture)
-    document.getElementById('updateProfile').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const newUsername = document.getElementById('newUsername').value;
-        const newProfilePic = document.getElementById('newProfilePic').files[0];
-        const user = auth.currentUser;
+    function renderPost(postId, post, user) {
+        const username = user.username || "Unknown";
+        const profilePic = user.profilePicBase64 || "default-profile.png";
+        const postDate = post.timestamp 
+            ? new Date(post.timestamp.toDate()).toLocaleString()
+            : "Just Now";
 
-        if (user) {
-            const userRef = db.collection("users").doc(user.uid);
+        const div = document.createElement('div');
+        div.className = 'post';
+        div.dataset.id = postId;
+        div.innerHTML = `
+            <div class="post-header">
+                <img src="${profilePic}" class="post-profile-pic">
+                <div>
+                    <p class="post-username"><strong>${username}</strong></p>
+                    <p class="post-time">${postDate}</p>
+                </div>
+            </div>
+            <div class="post-content">
+                <p>${post.text}</p>
+            </div>
+        `;
+        return div;
+    }
 
-            try {
-                let updateData = { username: newUsername };
-
-                if (newProfilePic) {
-                    const fileRef = storage.ref().child(`profilePics/${user.uid}`);
-                    await fileRef.put(newProfilePic);
-                    const profilePicUrl = await fileRef.getDownloadURL();
-                    updateData.profilePicUrl = profilePicUrl;
-                }
-
-                await userRef.update(updateData);
-                showError("Profile updated successfully!");
-                loadPosts(); // Refresh UI with new username and profile picture
-            } catch (error) {
-                showError("Failed to update profile: " + error.message);
-            }
-        } else {
-            showError("You must be logged in to update profile.");
+    function updatePost(postId, post) {
+        const postElement = postsContainer.querySelector(`[data-id="${postId}"]`);
+        if (postElement) {
+            postElement.querySelector('.post-content p').textContent = post.text;
         }
-    });
+    }
 });
