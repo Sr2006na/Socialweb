@@ -3,6 +3,7 @@ body {
     margin: 0;
     padding: 0;
     background-color: #f4f4f9;
+    overflow-x: hidden;
 }
 
 .navbar {
@@ -27,6 +28,8 @@ body {
 
 .container {
     padding: 20px;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .post-form {
@@ -40,15 +43,17 @@ body {
     border: 1px solid #ddd;
     resize: vertical;
     font-size: 16px;
+    box-sizing: border-box;
 }
 
 .posts-container {
     max-width: 600px;
-    margin: auto;
+    margin: 0 auto;
     display: flex;
     flex-direction: column;
     gap: 15px;
 }
+
 .post {
     background: white;
     padding: 15px;
@@ -61,10 +66,9 @@ body {
 
 .post-header {
     display: flex;
-    align-items: center;  /* Ensures image and username are aligned */
-    gap: 10px; /* Adds space between profile image and username */
+    align-items: center;
+    gap: 10px;
 }
-
 
 .post:hover {
     transform: scale(1.02);
@@ -74,7 +78,7 @@ body {
     width: 50px;
     height: 50px;
     border-radius: 50%;
-    flex-shrink: 0; /* Prevents image from resizing */
+    flex-shrink: 0;
 }
 
 .post-username {
@@ -82,10 +86,8 @@ body {
     font-weight: bold;
 }
 
-
-
 .post-content {
-    margin-left: 60px; /* Pushes text right to align under username */
+    margin-left: 60px;
 }
 
 .btn {
@@ -94,7 +96,7 @@ body {
     border-radius: 6px;
     cursor: pointer;
     font-size: 16px;
-    transition: 0.3s;
+    transition: background-color 0.3s;
 }
 
 .btn-primary {
@@ -104,6 +106,110 @@ body {
 
 .btn-primary:hover {
     background-color: #0056b3;
+}
+
+.auth-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #007bff, #00c4cc);
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.auth-container {
+    background: white;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+    width: 100%;
+    max-width: 400px;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.auth-container h2 {
+    margin-bottom: 20px;
+    color: #333;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.input-group {
+    position: relative;
+    width: 100%;
+}
+
+.input-group input {
+    width: 100%;
+    padding: 12px 40px 12px 15px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 16px;
+    transition: border-color 0.3s;
+    box-sizing: border-box;
+}
+
+.input-group input:focus {
+    border-color: #007bff;
+    outline: none;
+}
+
+.input-icon {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 18px;
+    color: #666;
+}
+
+.auth-switch, .auth-options {
+    margin: 15px 0;
+    color: #666;
+}
+
+.auth-switch a, .auth-options a {
+    color: #007bff;
+    text-decoration: none;
+}
+
+.auth-switch a:hover, .auth-options a:hover {
+    text-decoration: underline;
+}
+
+.btn-google {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    border: 1px solid #ddd;
+    color: #333;
+    padding: 10px;
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.google-icon {
+    background: #4285f4;
+    color: white;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+}
+
+.btn-google:hover {
+    background: #f8f8f8;
 }
 
 .profile-container {
@@ -131,9 +237,55 @@ body {
     border-radius: 6px;
     border: 1px solid #ddd;
     font-size: 16px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.profile-container input[type="date"] {
+    padding: 8px;
 }
 
 .profile-container textarea {
     resize: vertical;
 }
 
+
+
+
+
+
+.error-popup {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #ff4444;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 6px;
+    display: none;
+    z-index: 1000;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    max-width: 90%;
+    text-align: center;
+}
+
+/* Responsive Design */
+@media (max-width: 480px) {
+    .auth-container {
+        padding: 20px;
+        max-width: 100%;
+    }
+
+    .navbar {
+        padding: 10px;
+    }
+
+    .posts-container {
+        max-width: 100%;
+    }
+
+    .post-content {
+        margin-left: 0;
+    }
+}
