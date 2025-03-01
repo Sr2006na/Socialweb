@@ -13,7 +13,6 @@ document.addEventListener("DOMContentLoaded", () => {
     var backBtn = document.getElementById("backBtn");
 
     let unsubscribeUser = null;
-    let isNavigating = false;
 
     auth.onAuthStateChanged((user) => {
         if (user) {
@@ -84,7 +83,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 await db.collection("users").doc(user.uid).set({
                     profilePicBase64: base64String
                 }, { merge: true });
-
                 profilePic.src = base64String;
                 console.log("Profile picture updated successfully!");
             } catch (error) {
@@ -96,23 +94,27 @@ document.addEventListener("DOMContentLoaded", () => {
         reader.readAsDataURL(file);
     });
 
-    const handleBackClick = (e) => {
+    // Improved back button functionality
+    backBtn.addEventListener("click", (e) => {
         e.preventDefault();
-        if (isNavigating) return;
-
-        isNavigating = true;
-        console.log("Back button clicked, cleaning up...");
-
         if (unsubscribeUser) {
             unsubscribeUser();
             unsubscribeUser = null;
         }
-
-        setTimeout(() => {
+        // Use history API to navigate back cleanly
+        if (window.history.length > 1) {
+            window.history.back();
+        } else {
             window.location.href = "index.html";
-        }, 100);
-    };
+        }
+    });
 
-    backBtn.removeEventListener("click", handleBackClick);
-    backBtn.addEventListener("click", handleBackClick, { once: true });
+    // Handle popstate for mobile back button
+    window.addEventListener('popstate', () => {
+        if (unsubscribeUser) {
+            unsubscribeUser();
+            unsubscribeUser = null;
+        }
+        initializeUI(); // Ensure UI is refreshed
+    });
 });
