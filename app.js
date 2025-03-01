@@ -2,7 +2,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const auth = window.auth;
     const db = window.db;
     const storage = window.storage;
-    const provider = window.provider;
 
     const authWrapper = document.getElementById('authWrapper');
     const authContainer = document.getElementById('authContainer');
@@ -23,11 +22,27 @@ document.addEventListener("DOMContentLoaded", () => {
     const AUTH_COOLDOWN = 2000; // 2 seconds cooldown
     const MIN_PASSWORD_LENGTH = 8;
 
+    // Ensure UI is initialized correctly
+    function initializeUI() {
+        if (auth.currentUser) {
+            authWrapper.style.display = 'none';
+            mainContainer.style.display = 'block';
+            navbar.style.display = 'flex';
+            loadPosts();
+        } else {
+            authWrapper.style.display = 'flex';
+            authContainer.style.display = 'block';
+            loginContainer.style.display = 'none';
+            mainContainer.style.display = 'none';
+            navbar.style.display = 'none';
+        }
+    }
+
     // Auth state management
     auth.onAuthStateChanged(async (user) => {
         if (user) {
             const userDoc = await db.collection("users").doc(user.uid).get();
-            if (userDoc.exists && (user.emailVerified || user.providerData.some(p => p.providerId === 'google.com'))) {
+            if (userDoc.exists && user.emailVerified) {
                 authWrapper.style.display = 'none';
                 mainContainer.style.display = 'block';
                 navbar.style.display = 'flex';
@@ -48,6 +63,9 @@ document.addEventListener("DOMContentLoaded", () => {
             navbar.style.display = 'none';
         }
     });
+
+    // Call initializeUI immediately to fix UI not showing bug
+    initializeUI();
 
     function showError(message) {
         errorPopup.innerText = message;
@@ -169,9 +187,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 await user.sendEmailVerification({ url: window.location.href, handleCodeInApp: true });
                 showError("Verification email resent. Check your inbox.");
                 await auth.signOut();
-            } else {
-                // Login successful, handled by onAuthStateChanged
-                console.log("Login successful for:", user.email);
             }
         } catch (error) {
             console.error("Login error:", error);
@@ -209,34 +224,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    // Google Sign-In
-    const handleGoogleSignIn = async () => {
-        if (!canAttemptAuth()) return;
-
-        try {
-            const result = await auth.signInWithPopup(provider);
-            const user = result.user;
-            const userDoc = await db.collection("users").doc(user.uid).get();
-
-            if (!userDoc.exists) {
-                await db.collection("users").doc(user.uid).set({
-                    username: user.displayName || user.email.split('@')[0],
-                    profilePicBase64: user.photoURL || "",
-                    email: user.email,
-                    dob: "",
-                    verified: true,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-            }
-        } catch (error) {
-            console.error("Google Sign-In error:", error);
-            showError(error.message);
-        }
-    };
-
-    document.getElementById('googleSignIn').addEventListener('click', handleGoogleSignIn);
-    document.getElementById('googleSignInLogin').addEventListener('click', handleGoogleSignIn);
-
     profileBtn.addEventListener("click", () => window.location.href = "profile.html");
 
     logoutBtn.addEventListener("click", async () => {
@@ -272,7 +259,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         unsubscribePosts = db.collection("posts")
             .orderBy("timestamp", "desc")
-            
+            .limit(50)
             .onSnapshot(async (snapshot) => {
                 const fragment = document.createDocumentFragment();
                 const userPromises = [];
