@@ -7,11 +7,13 @@ document.addEventListener("DOMContentLoaded", () => {
     var profilePicInput = document.getElementById("profilePicInput");
     var usernameInput = document.getElementById("usernameInput");
     var bioInput = document.getElementById("bioInput");
+    var emailInput = document.getElementById("emailInput");
+    var dobInput = document.getElementById("dobInput");
     var saveProfileBtn = document.getElementById("saveProfileBtn");
     var backBtn = document.getElementById("backBtn");
 
     let unsubscribeUser = null;
-    let isNavigating = false; // Flag to prevent multiple clicks
+    let isNavigating = false;
 
     auth.onAuthStateChanged((user) => {
         if (user) {
@@ -27,6 +29,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 var data = doc.data();
                 usernameInput.value = data.username || "";
                 bioInput.value = data.bio || "";
+                emailInput.value = data.email || user.email || "";
+                dobInput.value = data.dob || "";
                 if (data.profilePicBase64) {
                     profilePic.src = data.profilePicBase64;
                 } else {
@@ -42,11 +46,15 @@ document.addEventListener("DOMContentLoaded", () => {
         var user = auth.currentUser;
         var username = usernameInput.value.trim();
         var bio = bioInput.value.trim();
+        var email = emailInput.value.trim();
+        var dob = dobInput.value;
 
         try {
             await db.collection("users").doc(user.uid).set({
                 username,
-                bio
+                bio,
+                email,
+                dob
             }, { merge: true });
             alert("Profile Updated!");
         } catch (error) {
@@ -88,27 +96,23 @@ document.addEventListener("DOMContentLoaded", () => {
         reader.readAsDataURL(file);
     });
 
-    // Debounced back button handler
     const handleBackClick = (e) => {
-        e.preventDefault(); // Prevent any default behavior
-        if (isNavigating) return; // Prevent multiple rapid clicks
+        e.preventDefault();
+        if (isNavigating) return;
 
         isNavigating = true;
         console.log("Back button clicked, cleaning up...");
 
-        // Clean up listener
         if (unsubscribeUser) {
             unsubscribeUser();
             unsubscribeUser = null;
         }
 
-        // Ensure DOM is stable before navigating
         setTimeout(() => {
             window.location.href = "index.html";
-        }, 100); // Small delay to allow cleanup
+        }, 100);
     };
 
-    // Remove any existing listeners and add a single one
-    backBtn.removeEventListener("click", handleBackClick); // Prevent duplicates
-    backBtn.addEventListener("click", handleBackClick, { once: true }); // Use 'once' to ensure single execution
+    backBtn.removeEventListener("click", handleBackClick);
+    backBtn.addEventListener("click", handleBackClick, { once: true });
 });
