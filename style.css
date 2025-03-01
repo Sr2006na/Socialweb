@@ -116,6 +116,8 @@ body {
     background: linear-gradient(135deg, #007bff, #00c4cc);
     padding: 20px;
     box-sizing: border-box;
+    position: relative;
+    z-index: 1;
 }
 
 .auth-container {
@@ -127,6 +129,8 @@ body {
     max-width: 400px;
     text-align: center;
     box-sizing: border-box;
+    position: relative;
+    z-index: 2;
 }
 
 .auth-container h2 {
@@ -183,35 +187,6 @@ body {
     text-decoration: underline;
 }
 
-.btn-google {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #fff;
-    border: 1px solid #ddd;
-    color: #333;
-    padding: 10px;
-    gap: 10px;
-    width: 100%;
-    box-sizing: border-box;
-}
-
-.google-icon {
-    background: #4285f4;
-    color: white;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-}
-
-.btn-google:hover {
-    background: #f8f8f8;
-}
-
 .profile-container {
     max-width: 600px;
     margin: 20px auto;
@@ -248,6 +223,8 @@ body {
 .profile-container textarea {
     resize: vertical;
 }
+
+
 
 
 
