@@ -1,32 +1,47 @@
 document.addEventListener("DOMContentLoaded", () => {
-    var auth = window.auth;
-    var db = window.db;
-    var storage = window.storage;
-    var provider = window.provider;
+    const auth = window.auth;
+    const db = window.db;
+    const storage = window.storage;
+    const provider = window.provider;
 
-    var authContainer = document.getElementById('authContainer');
-    var loginContainer = document.getElementById('loginContainer');
-    var navbar = document.querySelector('.navbar');
-    var mainContainer = document.querySelector('.container');
-    var postText = document.getElementById('postText');
-    var postBtn = document.getElementById('postBtn');
-    var postsContainer = document.getElementById('posts');
-    var profileBtn = document.getElementById('profileBtn');
-    var logoutBtn = document.getElementById('logoutBtn');
-    var errorPopup = document.getElementById('errorPopup');
+    const authWrapper = document.getElementById('authWrapper');
+    const authContainer = document.getElementById('authContainer');
+    const loginContainer = document.getElementById('loginContainer');
+    const navbar = document.querySelector('.navbar');
+    const mainContainer = document.querySelector('.container');
+    const postText = document.getElementById('postText');
+    const postBtn = document.getElementById('postBtn');
+    const postsContainer = document.getElementById('posts');
+    const profileBtn = document.getElementById('profileBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const errorPopup = document.getElementById('errorPopup');
+    const forgotPasswordLink = document.getElementById('forgotPasswordLink');
 
     let unsubscribePosts = null;
     const postCache = new Map();
+    let lastAuthAttempt = 0;
+    const AUTH_COOLDOWN = 2000; // 2 seconds cooldown
+    const MIN_PASSWORD_LENGTH = 8;
 
-    auth.onAuthStateChanged((user) => {
+    // Auth state management
+    auth.onAuthStateChanged(async (user) => {
         if (user) {
-            authContainer.style.display = 'none';
-            loginContainer.style.display = 'none';
-            mainContainer.style.display = 'block';
-            navbar.style.display = 'flex';
-            loadPosts();
+            const userDoc = await db.collection("users").doc(user.uid).get();
+            if (userDoc.exists && (user.emailVerified || user.providerData.some(p => p.providerId === 'google.com'))) {
+                authWrapper.style.display = 'none';
+                mainContainer.style.display = 'block';
+                navbar.style.display = 'flex';
+                loadPosts();
+            } else {
+                showError("Please verify your email to access SocialWeb.");
+                await auth.signOut();
+                authWrapper.style.display = 'flex';
+                authContainer.style.display = 'block';
+                loginContainer.style.display = 'none';
+            }
         } else {
             cleanup();
+            authWrapper.style.display = 'flex';
             authContainer.style.display = 'block';
             loginContainer.style.display = 'none';
             mainContainer.style.display = 'none';
@@ -37,7 +52,7 @@ document.addEventListener("DOMContentLoaded", () => {
     function showError(message) {
         errorPopup.innerText = message;
         errorPopup.style.display = 'block';
-        setTimeout(() => errorPopup.style.display = 'none', 3000);
+        setTimeout(() => errorPopup.style.display = 'none', 4000);
     }
 
     function cleanup() {
@@ -47,6 +62,16 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         postsContainer.innerHTML = '';
         postCache.clear();
+    }
+
+    function canAttemptAuth() {
+        const now = Date.now();
+        if (now - lastAuthAttempt < AUTH_COOLDOWN) {
+            showError("Please wait before trying again.");
+            return false;
+        }
+        lastAuthAttempt = now;
+        return true;
     }
 
     document.getElementById('signupLink').addEventListener('click', (e) => {
@@ -61,56 +86,167 @@ document.addEventListener("DOMContentLoaded", () => {
         loginContainer.style.display = 'block';
     });
 
+    function isValidEmail(email) {
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        const blockedDomains = ['tempmail', 'mailinator', 'guerrillamail', '10minutemail', 'throwawaymail', 'yopmail'];
+        const domain = email.split('@')[1]?.toLowerCase();
+        return emailRegex.test(email) && !blockedDomains.some(temp => domain.includes(temp));
+    }
+
+    function isStrongPassword(password) {
+        return password.length >= MIN_PASSWORD_LENGTH && /[A-Z]/.test(password) && /[0-9]/.test(password);
+    }
+
+    // Signup
     document.getElementById('signupForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-        var email = document.getElementById('signupEmail').value;
-        var password = document.getElementById('signupPassword').value;
+        if (!canAttemptAuth()) return;
+
+        const email = document.getElementById('signupEmail').value.trim();
+        const password = document.getElementById('signupPassword').value;
+
+        if (!isValidEmail(email)) {
+            showError("Please use a valid, non-temporary email address.");
+            return;
+        }
+
+        if (!isStrongPassword(password)) {
+            showError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters with an uppercase letter and a number.`);
+            return;
+        }
 
         try {
             const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-            await db.collection("users").doc(userCredential.user.uid).set({
+            const user = userCredential.user;
+
+            await db.collection("users").doc(user.uid).set({
                 username: email.split('@')[0],
-                profilePicBase64: "" // Default empty Base64
+                profilePicBase64: "",
+                email: email,
+                dob: "",
+                verified: false,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
+
+            await user.sendEmailVerification({ url: window.location.href, handleCodeInApp: true });
+            showError("Verification email sent! Please check your inbox.");
+            await auth.signOut();
         } catch (error) {
-            showError(error.message);
+            console.error("Signup error:", error);
+            switch (error.code) {
+                case 'auth/email-already-in-use': showError("Email already in use."); break;
+                case 'auth/invalid-email': showError("Invalid email format."); break;
+                case 'auth/weak-password': showError("Password is too weak."); break;
+                default: showError(error.message);
+            }
         }
     });
 
+    // Login
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-        var email = document.getElementById('loginEmail').value;
-        var password = document.getElementById('loginPassword').value;
+        if (!canAttemptAuth()) return;
+
+        const email = document.getElementById('loginEmail').value.trim();
+        const password = document.getElementById('loginPassword').value;
+
+        if (!isValidEmail(email)) {
+            showError("Please enter a valid email address.");
+            return;
+        }
+
+        if (!password) {
+            showError("Please enter your password.");
+            return;
+        }
 
         try {
-            await auth.signInWithEmailAndPassword(email, password);
+            const userCredential = await auth.signInWithEmailAndPassword(email, password);
+            const user = userCredential.user;
+
+            if (!user.emailVerified) {
+                showError("Please verify your email first.");
+                await user.sendEmailVerification({ url: window.location.href, handleCodeInApp: true });
+                showError("Verification email resent. Check your inbox.");
+                await auth.signOut();
+            } else {
+                // Login successful, handled by onAuthStateChanged
+                console.log("Login successful for:", user.email);
+            }
         } catch (error) {
-            showError(error.message);
+            console.error("Login error:", error);
+            switch (error.code) {
+                case 'auth/user-not-found':
+                case 'auth/wrong-password': showError("Incorrect email or password."); break;
+                case 'auth/too-many-requests': showError("Too many attempts. Try again later."); break;
+                case 'auth/invalid-credential': showError("Invalid login credentials."); break;
+                default: showError(error.message);
+            }
         }
     });
 
-    profileBtn.addEventListener("click", () => {
-        window.location.href = "profile.html";
+    // Forgot Password
+    forgotPasswordLink.addEventListener('click', async (e) => {
+        e.preventDefault();
+        if (!canAttemptAuth()) return;
+
+        const email = document.getElementById('loginEmail').value.trim();
+        if (!isValidEmail(email)) {
+            showError("Please enter a valid email address.");
+            return;
+        }
+
+        try {
+            await auth.sendPasswordResetEmail(email, { url: window.location.href, handleCodeInApp: true });
+            showError("Password reset email sent! Check your inbox.");
+        } catch (error) {
+            console.error("Forgot password error:", error);
+            switch (error.code) {
+                case 'auth/user-not-found': showError("No account found with this email."); break;
+                case 'auth/too-many-requests': showError("Too many requests. Try again later."); break;
+                default: showError(error.message);
+            }
+        }
     });
+
+    // Google Sign-In
+    const handleGoogleSignIn = async () => {
+        if (!canAttemptAuth()) return;
+
+        try {
+            const result = await auth.signInWithPopup(provider);
+            const user = result.user;
+            const userDoc = await db.collection("users").doc(user.uid).get();
+
+            if (!userDoc.exists) {
+                await db.collection("users").doc(user.uid).set({
+                    username: user.displayName || user.email.split('@')[0],
+                    profilePicBase64: user.photoURL || "",
+                    email: user.email,
+                    dob: "",
+                    verified: true,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            }
+        } catch (error) {
+            console.error("Google Sign-In error:", error);
+            showError(error.message);
+        }
+    };
+
+    document.getElementById('googleSignIn').addEventListener('click', handleGoogleSignIn);
+    document.getElementById('googleSignInLogin').addEventListener('click', handleGoogleSignIn);
+
+    profileBtn.addEventListener("click", () => window.location.href = "profile.html");
 
     logoutBtn.addEventListener("click", async () => {
         try {
             cleanup();
             await auth.signOut();
-            window.location.href = "index.html";
         } catch (error) {
-            console.error("Error during logout:", error);
+            showError("Error during logout: " + error.message);
         }
     });
-
-    const handleGoogleSignIn = () => {
-        auth.signInWithPopup(provider).catch((error) => {
-            showError(error.message);
-        });
-    };
-
-    document.getElementById('googleSignIn').addEventListener('click', handleGoogleSignIn);
-    document.getElementById('googleSignInLogin').addEventListener('click', handleGoogleSignIn);
 
     postBtn.addEventListener("click", async () => {
         const postContent = postText.value.trim();
@@ -127,6 +263,7 @@ document.addEventListener("DOMContentLoaded", () => {
             postText.value = "";
         } catch (error) {
             console.error("Error adding post:", error);
+            showError("Failed to post.");
         }
     });
 
@@ -135,6 +272,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         unsubscribePosts = db.collection("posts")
             .orderBy("timestamp", "desc")
+            
             .onSnapshot(async (snapshot) => {
                 const fragment = document.createDocumentFragment();
                 const userPromises = [];
